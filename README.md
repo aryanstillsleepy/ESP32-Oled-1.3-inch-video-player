@@ -67,28 +67,41 @@ The current format uses:
 Each frame requires:
 128 × 64 ÷ 8 = 1024 bytes
 
-# # # Project Structure
+## Project Structure
 
-ESP32-OLED-Video-Player/
-│
-├── README.md
-├── LICENSE
-├── .gitignore
-│
-├── converter/
-│   ├── video_converter.py
-│   └── requirements.txt
-│
-└── ESP32_Player/
-    ├── ESP32_Player.ino
-    └── data/
+### `converter/`
+
+Contains the Python video conversion tool.
+
+- `video_converter.py` — converts video files into `video.bin`
+- `requirements.txt` — Python dependencies
+
+### `ESP32_Player/`
+
+Contains the Arduino ESP32 video player.
+
+- `ESP32_Player.ino` — ESP32 playback firmware
+- `data/` — contains `video.bin` before uploading the FFAT filesystem
+
+### Root Files
+
+- `README.md` — project documentation
+- `LICENSE` — MIT License
+- `.gitignore` — prevents generated video files from being uploaded
 
   # # # Creating a Video
 Place the source video next to the Python converter:
 
-converter/
-├── video_converter.py
-└── video.mp4
+### Creating a Video
+
+1. Place the source video in the `converter/` folder.
+2. Make sure the file is named `video.mp4`.
+3. Run `video_converter.py`.
+4. The converter creates `video.bin`.
+5. Move `video.bin` into the `ESP32_Player/data/` folder.
+6. Build and upload the FFAT filesystem to the ESP32.
+
+The generated `video.bin` is not stored in the GitHub repository.
 
 # # # Run
 Bash:
