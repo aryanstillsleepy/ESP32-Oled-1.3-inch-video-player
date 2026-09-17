@@ -152,4 +152,4 @@ ESP32-S3
 Approximately 152 seconds of video
 7 MB video.bin
 
-The full 7000 -frame video was successfully converted, uploaded to FFAT, detected by the ESP32, and played back. Full Limitations are on the available FFAT storage
+The full 7000 -frame video was successfully converted, uploaded to FFAT, detected by the ESP32, and played back. Full Limitations are on the available FFAT storage.
