@@ -1,0 +1,497 @@
+import cv2
+import numpy as np
+import os
+
+
+# =====================================================
+# SETTINGS
+# =====================================================
+
+PROJECT_FOLDER = os.path.dirname(os.path.abspath(__file__))
+
+INPUT_FILE = os.path.join(
+    PROJECT_FOLDER,
+    "video7.mp4"
+)
+
+OUTPUT_FILE = os.path.join(
+    PROJECT_FOLDER,
+    "video.bin"
+)
+
+WIDTH = 128
+HEIGHT = 64
+
+
+# =====================================================
+# CROP + RESIZE
+# VERTICAL VIDEO VERSION
+# =====================================================
+
+def crop_and_resize(frame):
+
+    # Rotate vertical video 90 degrees clockwise
+    frame = cv2.rotate(
+        frame,
+        cv2.ROTATE_90_CLOCKWISE
+    )
+
+    h, w = frame.shape[:2]
+
+    target_ratio = WIDTH / HEIGHT
+    current_ratio = w / h
+
+    # Video is too wide
+    if current_ratio > target_ratio:
+
+        new_width = int(h * target_ratio)
+
+        left = (w - new_width) // 2
+
+        frame = frame[
+            :,
+            left:left + new_width
+        ]
+
+    # Video is too tall
+    elif current_ratio < target_ratio:
+
+        new_height = int(w / target_ratio)
+
+        top = (h - new_height) // 2
+
+        frame = frame[
+            top:top + new_height,
+            :
+        ]
+
+    # Resize to OLED resolution
+    frame = cv2.resize(
+        frame,
+        (WIDTH, HEIGHT),
+        interpolation=cv2.INTER_AREA
+    )
+
+    return frame
+
+
+# =====================================================
+# FLOYD–STEINBERG DITHERING
+# =====================================================
+
+def floyd_steinberg(image):
+
+    image = image.astype(np.float32)
+
+    for y in range(image.shape[0]):
+
+        for x in range(image.shape[1]):
+
+            old_pixel = image[y, x]
+
+            if old_pixel >= 128:
+                new_pixel = 255
+            else:
+                new_pixel = 0
+
+            image[y, x] = new_pixel
+
+            error = old_pixel - new_pixel
+
+            # Right
+            if x + 1 < image.shape[1]:
+                image[y, x + 1] += error * 7 / 16
+
+            # Bottom-left
+            if (
+                y + 1 < image.shape[0]
+                and x > 0
+            ):
+                image[y + 1, x - 1] += error * 3 / 16
+
+            # Bottom
+            if y + 1 < image.shape[0]:
+                image[y + 1, x] += error * 5 / 16
+
+            # Bottom-right
+            if (
+                y + 1 < image.shape[0]
+                and x + 1 < image.shape[1]
+            ):
+                image[y + 1, x + 1] += error * 1 / 16
+
+    return np.clip(
+        image,
+        0,
+        255
+    ).astype(np.uint8)
+
+
+# =====================================================
+# CONVERT FRAME TO OLED FORMAT
+# =====================================================
+
+def frame_to_bytes(mono):
+
+    data = bytearray()
+
+    # 128 x 64 = 8 pages x 128 bytes
+
+    for page in range(HEIGHT // 8):
+
+        for x in range(WIDTH):
+
+            byte = 0
+
+            for bit in range(8):
+
+                pixel = mono[
+                    page * 8 + bit,
+                    x
+                ]
+
+                if pixel > 0:
+
+                    byte |= (
+                        1 << bit
+                    )
+
+            data.append(byte)
+
+    return data
+
+
+# =====================================================
+# CONVERT VIDEO
+# =====================================================
+
+def convert_video():
+
+    print("========================================")
+    print(" OLED VERTICAL VIDEO BIN CONVERTER")
+    print(" 9:16 REELS / YOUTUBE SHORTS")
+    print(" ORIGINAL FPS / FULL VIDEO")
+    print("========================================")
+    print()
+
+    # -------------------------------------------------
+    # Check input
+    # -------------------------------------------------
+
+    if not os.path.exists(INPUT_FILE):
+
+        print("ERROR:")
+        print("video.mp4 was not found.")
+        print()
+        print("Put video.mp4 in the same folder")
+        print("as this Python file.")
+
+        return
+
+    # -------------------------------------------------
+    # Open video
+    # -------------------------------------------------
+
+    video = cv2.VideoCapture(INPUT_FILE)
+
+    if not video.isOpened():
+
+        print("ERROR: Could not open video.")
+
+        return
+
+    # -------------------------------------------------
+    # Get video information
+    # -------------------------------------------------
+
+    original_width = int(
+        video.get(cv2.CAP_PROP_FRAME_WIDTH)
+    )
+
+    original_height = int(
+        video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    )
+
+    original_fps = video.get(
+        cv2.CAP_PROP_FPS
+    )
+
+    total_frames = int(
+        video.get(cv2.CAP_PROP_FRAME_COUNT)
+    )
+
+    if original_fps <= 0:
+
+        print("ERROR: Invalid video FPS.")
+
+        video.release()
+
+        return
+
+    duration = (
+        total_frames / original_fps
+    )
+
+    fps_milli = int(
+        round(original_fps * 1000)
+    )
+
+    print(
+        f"Original size: "
+        f"{original_width}x{original_height}"
+    )
+
+    print(
+        f"Original FPS: "
+        f"{original_fps:.3f}"
+    )
+
+    print(
+        f"Original frames: "
+        f"{total_frames}"
+    )
+
+    print(
+        f"Duration: "
+        f"{duration:.2f} seconds"
+    )
+
+    print()
+
+    print(
+        f"OLED output: "
+        f"{WIDTH}x{HEIGHT}"
+    )
+
+    print(
+        f"Output FPS: "
+        f"{original_fps:.3f}"
+    )
+
+    frame_size = (
+        WIDTH * HEIGHT // 8
+    )
+
+    print(
+        f"Bytes per frame: "
+        f"{frame_size}"
+    )
+
+    print()
+
+    # -------------------------------------------------
+    # Create output file
+    # -------------------------------------------------
+
+    try:
+
+        output = open(
+            OUTPUT_FILE,
+            "wb"
+        )
+
+    except Exception as e:
+
+        print(
+            "ERROR: Could not create "
+            "video_vertical.bin"
+        )
+
+        print(e)
+
+        video.release()
+
+        return
+
+    # -------------------------------------------------
+    # VIDEO HEADER
+    #
+    # 20 bytes total
+    #
+    # 0-3   = "OLED"
+    # 4-5   = width
+    # 6-7   = height
+    # 8-11  = FPS * 1000
+    # 12-15 = frame count
+    # 16-19 = frame size
+    # -------------------------------------------------
+
+    output.write(
+        b"OLED"
+    )
+
+    output.write(
+        WIDTH.to_bytes(
+            2,
+            "little"
+        )
+    )
+
+    output.write(
+        HEIGHT.to_bytes(
+            2,
+            "little"
+        )
+    )
+
+    output.write(
+        fps_milli.to_bytes(
+            4,
+            "little"
+        )
+    )
+
+    # Frame count filled in later
+
+    output.write(
+        (0).to_bytes(
+            4,
+            "little"
+        )
+    )
+
+    output.write(
+        frame_size.to_bytes(
+            4,
+            "little"
+        )
+    )
+
+    # -------------------------------------------------
+    # PROCESS EVERY FRAME
+    # -------------------------------------------------
+
+    frame_count = 0
+
+    while True:
+
+        success, frame = video.read()
+
+        if not success:
+            break
+
+        frame_count += 1
+
+        print(
+            f"\rConverting frame "
+            f"{frame_count}/{total_frames}",
+            end=""
+        )
+
+        # Grayscale
+        gray = cv2.cvtColor(
+            frame,
+            cv2.COLOR_BGR2GRAY
+        )
+
+        # Vertical crop + resize
+        gray = crop_and_resize(
+            gray
+        )
+
+        # Dithering
+        mono = floyd_steinberg(
+            gray
+        )
+
+        # OLED bytes
+        frame_data = frame_to_bytes(
+            mono
+        )
+
+        # Write frame
+        output.write(
+            frame_data
+        )
+
+    # -------------------------------------------------
+    # Finish
+    # -------------------------------------------------
+
+    video.release()
+
+    output.close()
+
+    # -------------------------------------------------
+    # Write final frame count
+    # -------------------------------------------------
+
+    with open(
+        OUTPUT_FILE,
+        "r+b"
+    ) as output:
+
+        output.seek(12)
+
+        output.write(
+            frame_count.to_bytes(
+                4,
+                "little"
+            )
+        )
+
+    # -------------------------------------------------
+    # File size
+    # -------------------------------------------------
+
+    file_size = os.path.getsize(
+        OUTPUT_FILE
+    )
+
+    # -------------------------------------------------
+    # Results
+    # -------------------------------------------------
+
+    print()
+
+    print("========================================")
+    print(" CONVERSION COMPLETE")
+    print("========================================")
+
+    print(
+        f"Frames: {frame_count}"
+    )
+
+    print(
+        f"Frame size: "
+        f"{WIDTH}x{HEIGHT}"
+    )
+
+    print(
+        f"FPS: {original_fps:.3f}"
+    )
+
+    print(
+        f"Bytes/frame: {frame_size}"
+    )
+
+    print(
+        f"video_vertical.bin size: "
+        f"{file_size / 1024:.2f} KB"
+    )
+
+    print(
+        f"video_vertical.bin size: "
+        f"{file_size / 1024 / 1024:.2f} MB"
+    )
+
+    print()
+
+    print("Created:")
+
+    print(OUTPUT_FILE)
+
+    print()
+
+    print("========================================")
+    print(" DONE")
+    print("========================================")
+
+
+# =====================================================
+# START
+# =====================================================
+
+if __name__ == "__main__":
+
+    convert_video()
